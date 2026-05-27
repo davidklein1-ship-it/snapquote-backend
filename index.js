@@ -64,10 +64,9 @@ app.post('/webhooks/call-status', async (req, res) => {
     const { data, error } = await supabase
       .from('leads')
       .insert({
-        phone: callerNumber,
-        status: 'new',
-        call_status: CallStatus,
-        twilio_number: To,
+        customer_phone: `whatsapp:${callerNumber}`,
+        status: 'New',
+        message_body: `Missed call from ${callerNumber}`,
         created_at: new Date().toISOString(),
       })
       .select()
@@ -117,13 +116,11 @@ app.post('/webhooks/whatsapp-incoming', async (req, res) => {
     const { error } = await supabase
       .from('leads')
       .update({
-        status: 'new',
-        customer_message: Body,
-        has_photo: NumMedia > 0,
-        photo_url: NumMedia > 0 ? MediaUrl0 : null,
+        message_body: Body,
+        status: 'New',
         updated_at: new Date().toISOString(),
       })
-      .eq('phone', callerNumber)
+      .eq('customer_phone', `whatsapp:${callerNumber}`)
       .order('created_at', { ascending: false })
       .limit(1);
 
