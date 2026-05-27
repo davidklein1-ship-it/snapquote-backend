@@ -117,8 +117,9 @@ app.post('/webhooks/whatsapp-incoming', async (req, res) => {
       .from('leads')
       .update({
         message_body: Body,
+        issue: Body,
         status: 'New',
-        updated_at: new Date().toISOString(),
+        photo_url: NumMedia > 0 ? MediaUrl0 : null,
       })
       .eq('customer_phone', `whatsapp:${callerNumber}`)
       .order('created_at', { ascending: false })
