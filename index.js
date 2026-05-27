@@ -142,11 +142,15 @@ app.post('/webhooks/whatsapp-incoming', async (req, res) => {
     console.error('❌ Supabase update error:', err.message);
   }
 
-  // Detect question
-  const isQuestion = Body && (
+  // Detect if this needs an AI reply — anything conversational, not just questions
+  const isJobInfo = Body && /^\s*([A-Z]{1,4}[0-9]{1,2}\s?[0-9][A-Z]{2}|nw|sw|se|ne|n|s|e|w)\d/i.test(Body) && Body.length < 30;
+  const isShortPostcode = Body && Body.trim().split(/\s+/).length <= 3 && /[A-Z0-9]/i.test(Body);
+  const isConversational = Body && (
     Body.includes('?') ||
-    /\b(how much|any idea|what does|what will|when can|when could|how long|do you|can you|are you|is it|will it|price|cost|charge|available|availability|soon|urgent|emergency|today|tomorrow|when|how soon)\b/i.test(Body)
+    Body.includes('!') ||
+    /\b(how|when|what|where|why|who|can|could|would|will|do|does|is|are|have|has|how much|any idea|price|cost|charge|available|soon|urgent|emergency|today|tomorrow|radiator|boiler|leak|pipe|drain|toilet|tap|heating|water|fix|repair|replace|help|thanks|thank|cheers|mate|please|asap|quickly|fast|quick|issue|problem|broken|blocked|burst|flooded|flooding|dripping|running|hot|cold|pressure)\b/i.test(Body)
   );
+  const isQuestion = isConversational && !isShortPostcode;
 
   let replyMessage;
 
@@ -162,7 +166,12 @@ app.post('/webhooks/whatsapp-incoming', async (req, res) => {
           
 A customer has sent this WhatsApp message after missing a call: "${Body}"
 
-Reply naturally and helpfully as the plumber would. Keep it conversational, warm and brief (2-4 sentences max). 
+Reply naturally and helpfully as the plumber would. Keep it conversational, warm and brief (2-4 sentences max).
+
+If they sound frustrated or impatient, acknowledge it briefly and be reassuring.
+If they've given job details, confirm you've got them and will be in touch.
+If they're asking about price or timing, give a helpful ballpark.
+If it's a statement about what's wrong, acknowledge the issue specifically and say you'll sort it.
 
 Key facts to use if relevant:
 - Call-out charge: ${DEFAULT_RATES.callOut} (includes first hour)
@@ -173,7 +182,8 @@ Key facts to use if relevant:
 - Always say exact prices depend on the job once we see it
 - End with "— DS Plumbing & Heating"
 - Never make promises you can't keep
-- Sound like a real plumber, not a chatbot`
+- Sound like a real plumber texting a customer, not a chatbot
+- Never start with "Hi there" — vary the opening`
         }]
       });
 
