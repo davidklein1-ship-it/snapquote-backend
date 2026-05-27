@@ -1,7 +1,23 @@
-"dependencies": {
+{
+  "name": "snapquote-backend",
+  "version": "1.0.0",
+  "description": "SnapQuote webhook server — missed call → WhatsApp flow",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
     "express": "^4.18.2",
     "twilio": "^5.0.0",
     "@supabase/supabase-js": "^2.45.0",
     "@anthropic-ai/sdk": "^0.20.0",
     "ws": "^8.18.0"
-},
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
