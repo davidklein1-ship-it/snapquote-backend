@@ -1,6 +1,5 @@
 const express = require('express');
 const twilio = require('twilio');
-const { createClient } = require('@supabase/supabase-js');
 const Anthropic = require('@anthropic-ai/sdk');
 
 const app = express();
@@ -18,24 +17,10 @@ const anthropic = new Anthropic({
 
 const SANDBOX_FROM = process.env.WHATSAPP_FROM || 'whatsapp:+14155238886';
 const PLUMBER_MOBILE = process.env.PLUMBER_MOBILE || '';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
-// Supabase client
-const ws = require('ws');
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    },
-    realtime: {
-      transport: ws
-    }
-  }
-);
-
-// UK plumber rate defaults (overridden by plumber's own rate card when available)
+// UK plumber rate defaults
 const DEFAULT_RATES = {
   callOut: '£80–£110',
   hourly: '£50–£75/hr',
@@ -46,6 +31,41 @@ const DEFAULT_RATES = {
   drainClearance: '£75–£200',
   responseTime: '24–48 hours for non-emergencies, same day for emergencies',
 };
+
+// Direct REST API calls to Supabase — no client library
+async function supabaseInsert(table, data) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Prefer': 'return=representation'
+    },
+    body: JSON.stringify(data)
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(JSON.stringify(result));
+  return result;
+}
+
+async function supabaseUpdate(table, data, match) {
+  const params = new URLSearchParams(match).toString();
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+    },
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) {
+    const result = await response.json();
+    throw new Error(JSON.stringify(result));
+  }
+  return true;
+}
 
 app.get('/', (req, res) => {
   res.send('CallCatch backend running ✓');
@@ -63,26 +83,17 @@ app.post('/webhooks/call-status', async (req, res) => {
 
   const callerNumber = From.replace('whatsapp:', '');
 
-  // Write lead to Supabase
+  // Write lead to Supabase via REST
   try {
-    const { data, error } = await supabase
-      .from('leads')
-      .insert({
-        customer_phone: `whatsapp:${callerNumber}`,
-        status: 'New',
-        message_body: `Missed call from ${callerNumber}`,
-        created_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('❌ Supabase insert error:', error.message);
-    } else {
-      console.log(`✅ Lead saved to Supabase: ${data.id}`);
-    }
+    const result = await supabaseInsert('leads', {
+      customer_phone: `whatsapp:${callerNumber}`,
+      status: 'New',
+      message_body: `Missed call from ${callerNumber}`,
+      created_at: new Date().toISOString(),
+    });
+    console.log(`✅ Lead saved to Supabase: ${result[0]?.id}`);
   } catch (err) {
-    console.error('❌ Supabase error:', err.message);
+    console.error('❌ Supabase insert error:', err.message);
   }
 
   // Send WhatsApp to caller
@@ -115,33 +126,26 @@ app.post('/webhooks/whatsapp-incoming', async (req, res) => {
   console.log(`💬 Reply from ${callerNumber}: ${Body}`);
   if (NumMedia > 0) console.log(`📷 Photo: ${MediaUrl0}`);
 
-  // Update lead in Supabase with customer reply
+  // Update lead in Supabase via REST
   try {
-    const { error } = await supabase
-      .from('leads')
-      .update({
+    await supabaseUpdate('leads',
+      {
         message_body: Body,
         issue: Body,
         status: 'New',
         photo_url: NumMedia > 0 ? MediaUrl0 : null,
-      })
-      .eq('customer_phone', `whatsapp:${callerNumber}`)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (error) {
-      console.error('❌ Supabase update error:', error.message);
-    } else {
-      console.log(`✅ Lead updated in Supabase for ${callerNumber}`);
-    }
+      },
+      { customer_phone: `eq.whatsapp:${callerNumber}` }
+    );
+    console.log(`✅ Lead updated in Supabase for ${callerNumber}`);
   } catch (err) {
-    console.error('❌ Supabase error:', err.message);
+    console.error('❌ Supabase update error:', err.message);
   }
 
-  // Decide: is this a question or just job info?
+  // Detect question
   const isQuestion = Body && (
     Body.includes('?') ||
-    /\b(how much|any idea|what does|what will|when can|how long|do you|can you|are you|is it|will it|price|cost|charge|available|availability|soon|urgent|emergency|today|tomorrow)\b/i.test(Body)
+    /\b(how much|any idea|what does|what will|when can|when could|how long|do you|can you|are you|is it|will it|price|cost|charge|available|availability|soon|urgent|emergency|today|tomorrow|when|how soon)\b/i.test(Body)
   );
 
   let replyMessage;
