@@ -22,7 +22,13 @@ const PLUMBER_MOBILE = process.env.PLUMBER_MOBILE || '';
 // Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
+  process.env.SUPABASE_SERVICE_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
 );
 
 // UK plumber rate defaults (overridden by plumber's own rate card when available)
@@ -142,7 +148,7 @@ app.post('/webhooks/whatsapp-incoming', async (req, res) => {
     console.log(`🤖 Question detected — generating AI reply`);
     try {
       const aiReply = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-5',
         max_tokens: 300,
         messages: [{
           role: 'user',
