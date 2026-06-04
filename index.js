@@ -6,16 +6,14 @@ const app = express();
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
 const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
-// Send a WhatsApp message via Meta Cloud API
+// ── WHATSAPP ──────────────────────────────────────────────
 async function sendWhatsApp(to, message) {
   const response = await fetch(`https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`, {
     method: 'POST',
@@ -35,7 +33,16 @@ async function sendWhatsApp(to, message) {
   return result;
 }
 
-async function supabaseInsert(table, data) {
+// ── SUPABASE HELPERS ──────────────────────────────────────
+async function dbGet(table, filters) {
+  const params = Object.entries(filters).map(([k,v]) => `${k}=${v}`).join('&');
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+  });
+  return response.json();
+}
+
+async function dbInsert(table, data) {
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
     method: 'POST',
     headers: {
@@ -51,8 +58,8 @@ async function supabaseInsert(table, data) {
   return result;
 }
 
-async function supabaseUpdate(table, data, match) {
-  const params = new URLSearchParams(match).toString();
+async function dbUpdate(table, data, filters) {
+  const params = Object.entries(filters).map(([k,v]) => `${k}=${v}`).join('&');
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
     method: 'PATCH',
     headers: {
@@ -69,10 +76,81 @@ async function supabaseUpdate(table, data, match) {
   return true;
 }
 
-// Health check
-app.get('/', (req, res) => {
-  res.send('CallCatch backend running');
-});
+// ── CONVERSATION MEMORY ───────────────────────────────────
+async function getOrCreateConversation(customerPhone) {
+  // Check for existing open conversation
+  const existing = await dbGet('conversations', {
+    customer_phone: `eq.${customerPhone}`,
+    status: 'eq.open',
+    'order': 'created_at.desc',
+    'limit': '1'
+  });
+
+  if (existing && existing.length > 0) {
+    return existing[0].id;
+  }
+
+  // Create new conversation
+  const created = await dbInsert('conversations', {
+    customer_phone: customerPhone,
+    status: 'open',
+    created_at: new Date().toISOString(),
+  });
+  return created[0].id;
+}
+
+async function getConversationHistory(conversationId) {
+  const messages = await dbGet('messages', {
+    conversation_id: `eq.${conversationId}`,
+    'order': 'id.asc',
+    'limit': '20'
+  });
+  if (!messages || messages.length === 0) return [];
+
+  return messages.map(m => ({
+    role: m.direction === 'inbound' ? 'user' : 'assistant',
+    content: m.body
+  }));
+}
+
+async function saveMessage(conversationId, direction, body) {
+  await dbInsert('messages', {
+    conversation_id: conversationId,
+    direction: direction,
+    body: body,
+    channel: 'whatsapp',
+    created_at: new Date().toISOString(),
+  });
+}
+
+// ── CALLCATCH SYSTEM PROMPT ───────────────────────────────
+const SYSTEM_PROMPT = `You are CallCatch, a WhatsApp assistant for a UK plumbing and heating business.
+
+A customer missed a call and you are following up to qualify their job. Your job is to collect:
+1. What the problem is
+2. How urgent it is
+3. Their postcode
+4. For non-emergencies: when they are available
+
+URGENCY RULES:
+HIGH (emergency): burst pipe, flooding, major leak, no heating in winter, gas smell, overflowing toilet. For HIGH urgency skip timing entirely and fire the proposal immediately after postcode.
+MEDIUM: boiler issue, persistent leak, blocked drain. Ask timing.
+LOW: planned work, service, quote. Ask timing.
+
+CRITICAL RULES:
+- Read the full conversation history before responding. Never ask for information already given.
+- If they already gave their postcode, do not ask again.
+- If they already described the problem, do not ask again.
+- Ask ONE question at a time.
+- Maximum 2 sentences per reply.
+- UK English only. Warm and human, like a smart PA.
+- Never quote a price.
+- Never use dashes, use commas instead.
+- No bullet points or lists.
+- Once you have all the information needed, say "Perfect, I have got all the details and am passing this to [plumber] now, he will be in touch very shortly."`;
+
+// ── ROUTES ────────────────────────────────────────────────
+app.get('/', (req, res) => res.send('CallCatch backend running'));
 
 // Meta webhook verification
 app.get('/webhooks/whatsapp-incoming', (req, res) => {
@@ -87,7 +165,7 @@ app.get('/webhooks/whatsapp-incoming', (req, res) => {
   }
 });
 
-// Claude proxy for tester
+// Claude proxy for tester UI
 app.post('/api/claude', async (req, res) => {
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -103,7 +181,6 @@ app.post('/api/claude', async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.status(response.status).send(text);
   } catch (err) {
-    console.error('Claude proxy error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -113,71 +190,75 @@ app.get('/tester', (req, res) => {
   res.sendFile(path.join(__dirname, 'callcatch-tester.html'));
 });
 
-// Incoming WhatsApp messages from Meta Cloud API
+// Incoming WhatsApp from Meta Cloud API
 app.post('/webhooks/whatsapp-incoming', async (req, res) => {
-  // Always respond 200 immediately to Meta
   res.status(200).send('OK');
 
   try {
     const body = req.body;
     if (body.object !== 'whatsapp_business_account') return;
 
-    const entry = body.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value = changes?.value;
-    const messages = value?.messages;
+    const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    if (!message) return;
 
-    if (!messages || messages.length === 0) return;
-
-    const message = messages[0];
     const from = message.from;
     const msgBody = message.type === 'text' ? message.text?.body : null;
-    const mediaUrl = message.type === 'image' ? message.image?.id : null;
+    if (!msgBody) return;
 
-    console.log('Message from ' + from + ': ' + msgBody);
+    console.log('Inbound from ' + from + ': ' + msgBody);
 
-    // Save to Supabase
-    try {
-      await supabaseUpdate('leads',
-        { message_body: msgBody, issue: msgBody, status: 'New', photo_url: mediaUrl },
-        { customer_phone: 'eq.' + from }
-      );
-    } catch (err) {
-      // Lead may not exist yet, try insert
-      try {
-        await supabaseInsert('leads', {
-          customer_phone: from,
-          status: 'New',
-          message_body: msgBody,
-          created_at: new Date().toISOString(),
-        });
-      } catch (e) {
-        console.error('Supabase error:', e.message);
-      }
-    }
+    // Get or create conversation
+    const conversationId = await getOrCreateConversation(from);
 
-    // Generate AI reply
-    let replyMessage = 'Thanks, got your details. We will be in touch shortly.';
+    // Save inbound message
+    await saveMessage(conversationId, 'inbound', msgBody);
 
-    if (msgBody && process.env.ANTHROPIC_API_KEY) {
+    // Load full history for context
+    const history = await getConversationHistory(conversationId);
+
+    // Generate AI reply with full history
+    let replyMessage = 'Thanks, got your details, we will be in touch shortly.';
+
+    if (process.env.ANTHROPIC_API_KEY) {
       try {
         const aiReply = await anthropic.messages.create({
           model: 'claude-sonnet-4-5',
           max_tokens: 300,
-          messages: [{
-            role: 'user',
-            content: 'You are CallCatch, a WhatsApp assistant for a UK plumber. A customer sent: "' + msgBody + '". Reply warmly in 2 sentences max, UK English. Ask for their postcode if not given. Ask about urgency if not clear. Never quote a price. No dashes, use commas.'
-          }]
+          system: SYSTEM_PROMPT,
+          messages: history
         });
         replyMessage = aiReply.content[0].text;
+        console.log('AI reply: ' + replyMessage);
       } catch (err) {
         console.error('Anthropic error:', err.message);
       }
     }
 
-    // Send reply via Meta Cloud API
+    // Save outbound message
+    await saveMessage(conversationId, 'outbound', replyMessage);
+
+    // Send via Meta Cloud API
     await sendWhatsApp(from, replyMessage);
     console.log('Reply sent to ' + from);
+
+    // Update lead record
+    try {
+      await dbUpdate('leads',
+        { message_body: msgBody, status: 'New' },
+        { customer_phone: `eq.${from}` }
+      );
+    } catch (e) {
+      try {
+        await dbInsert('leads', {
+          customer_phone: from,
+          status: 'New',
+          message_body: msgBody,
+          created_at: new Date().toISOString(),
+        });
+      } catch (e2) {
+        console.error('Lead save error:', e2.message);
+      }
+    }
 
   } catch (err) {
     console.error('Webhook error:', err.message);
