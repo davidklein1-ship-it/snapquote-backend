@@ -1,5 +1,4 @@
 const express = require('express');
-const twilio = require('twilio');
 const Anthropic = require('@anthropic-ai/sdk');
 const path = require('path');
 
@@ -7,30 +6,34 @@ const app = express();
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
-
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const SANDBOX_FROM = process.env.WHATSAPP_FROM || 'whatsapp:+14155238886';
-const PLUMBER_MOBILE = process.env.PLUMBER_MOBILE || '';
+const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
-const DEFAULT_RATES = {
-  callOut: '£80-£110',
-  hourly: '£50-£75/hr',
-  emergency: '£100-£150 call-out plus hourly rate',
-  blockedToilet: '£100-£150',
-  leakingTap: '£80-£120',
-  boilerService: '£80-£120',
-  drainClearance: '£75-£200',
-  responseTime: '24-48 hours for non-emergencies, same day for emergencies',
-};
+// Send a WhatsApp message via Meta Cloud API
+async function sendWhatsApp(to, message) {
+  const response = await fetch(`https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${ACCESS_TOKEN}`,
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: to,
+      type: 'text',
+      text: { body: message },
+    }),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(JSON.stringify(result));
+  return result;
+}
 
 async function supabaseInsert(table, data) {
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
@@ -110,111 +113,75 @@ app.get('/tester', (req, res) => {
   res.sendFile(path.join(__dirname, 'callcatch-tester.html'));
 });
 
-// Call status webhook
-app.post('/webhooks/call-status', async (req, res) => {
-  const { CallStatus, From, To } = req.body;
-  console.log('Call status: ' + CallStatus + ' from ' + From);
-
-  const shouldFire = ['no-answer', 'busy', 'failed', 'completed'].includes(CallStatus);
-  if (!shouldFire || !From) {
-    return res.set('Content-Type', 'text/xml').send('<Response></Response>');
-  }
-
-  const callerNumber = From.replace('whatsapp:', '');
-
-  try {
-    const result = await supabaseInsert('leads', {
-      customer_phone: 'whatsapp:' + callerNumber,
-      status: 'New',
-      message_body: 'Missed call from ' + callerNumber,
-      created_at: new Date().toISOString(),
-    });
-    console.log('Lead saved: ' + result[0]?.id);
-  } catch (err) {
-    console.error('Supabase insert error:', err.message);
-  }
-
-  try {
-    await client.messages.create({
-      from: SANDBOX_FROM,
-      to: 'whatsapp:' + callerNumber,
-      body: 'Hi, sorry we missed your call. Can you tell me the problem and your postcode?',
-    });
-    console.log('WhatsApp sent to ' + callerNumber);
-
-    if (PLUMBER_MOBILE) {
-      await client.messages.create({
-        from: To,
-        to: PLUMBER_MOBILE,
-        body: 'CallCatch: Missed call from ' + callerNumber + '. WhatsApp follow-up sent.',
-      });
-    }
-  } catch (err) {
-    console.error('Twilio error:', err.message);
-  }
-
-  res.set('Content-Type', 'text/xml').send('<Response></Response>');
-});
-
-// Incoming WhatsApp
+// Incoming WhatsApp messages from Meta Cloud API
 app.post('/webhooks/whatsapp-incoming', async (req, res) => {
-  const { From, Body, NumMedia, MediaUrl0 } = req.body;
-  const callerNumber = From.replace('whatsapp:', '');
-  console.log('Reply from ' + callerNumber + ': ' + Body);
+  // Always respond 200 immediately to Meta
+  res.status(200).send('OK');
 
   try {
-    await supabaseUpdate('leads',
-      {
-        message_body: Body,
-        issue: Body,
-        status: 'New',
-        photo_url: NumMedia > 0 ? MediaUrl0 : null,
-      },
-      { customer_phone: 'eq.whatsapp:' + callerNumber }
-    );
-  } catch (err) {
-    console.error('Supabase update error:', err.message);
-  }
+    const body = req.body;
+    if (body.object !== 'whatsapp_business_account') return;
 
-  const isShortPostcode = Body && Body.trim().split(/\s+/).length <= 3 && /[A-Z0-9]/i.test(Body);
-  const isConversational = Body && (
-    Body.includes('?') || Body.includes('!') ||
-    /\b(how|when|what|where|why|who|can|could|would|will|do|does|is|are|have|has|price|cost|charge|urgent|emergency|today|boiler|leak|pipe|drain|toilet|tap|heating|water|blocked|burst|flooding)\b/i.test(Body)
-  );
-  const isQuestion = isConversational && !isShortPostcode;
+    const entry = body.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const value = changes?.value;
+    const messages = value?.messages;
 
-  let replyMessage;
+    if (!messages || messages.length === 0) return;
 
-  if (isQuestion && process.env.ANTHROPIC_API_KEY) {
+    const message = messages[0];
+    const from = message.from;
+    const msgBody = message.type === 'text' ? message.text?.body : null;
+    const mediaUrl = message.type === 'image' ? message.image?.id : null;
+
+    console.log('Message from ' + from + ': ' + msgBody);
+
+    // Save to Supabase
     try {
-      const aiReply = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 300,
-        messages: [{
-          role: 'user',
-          content: 'You are a WhatsApp assistant for DS Plumbing & Heating. A customer sent: "' + Body + '". Reply warmly and briefly in 2-3 sentences UK English. Never quote exact prices. End with "DS Plumbing & Heating".'
-        }]
-      });
-      replyMessage = aiReply.content[0].text;
+      await supabaseUpdate('leads',
+        { message_body: msgBody, issue: msgBody, status: 'New', photo_url: mediaUrl },
+        { customer_phone: 'eq.' + from }
+      );
     } catch (err) {
-      console.error('Anthropic error:', err.message);
-      replyMessage = 'Thanks, got your details. We will be in touch shortly.';
+      // Lead may not exist yet, try insert
+      try {
+        await supabaseInsert('leads', {
+          customer_phone: from,
+          status: 'New',
+          message_body: msgBody,
+          created_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error('Supabase error:', e.message);
+      }
     }
-  } else {
-    replyMessage = 'Thanks, got your details.' + (NumMedia > 0 ? ' Photo received, really helpful.' : '') + ' We will be in touch shortly.';
-  }
 
-  try {
-    await client.messages.create({
-      from: SANDBOX_FROM,
-      to: From,
-      body: replyMessage,
-    });
+    // Generate AI reply
+    let replyMessage = 'Thanks, got your details. We will be in touch shortly.';
+
+    if (msgBody && process.env.ANTHROPIC_API_KEY) {
+      try {
+        const aiReply = await anthropic.messages.create({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 300,
+          messages: [{
+            role: 'user',
+            content: 'You are CallCatch, a WhatsApp assistant for a UK plumber. A customer sent: "' + msgBody + '". Reply warmly in 2 sentences max, UK English. Ask for their postcode if not given. Ask about urgency if not clear. Never quote a price. No dashes, use commas.'
+          }]
+        });
+        replyMessage = aiReply.content[0].text;
+      } catch (err) {
+        console.error('Anthropic error:', err.message);
+      }
+    }
+
+    // Send reply via Meta Cloud API
+    await sendWhatsApp(from, replyMessage);
+    console.log('Reply sent to ' + from);
+
   } catch (err) {
-    console.error('Twilio error:', err.message);
+    console.error('Webhook error:', err.message);
   }
-
-  res.set('Content-Type', 'text/xml').send('<Response></Response>');
 });
 
 const PORT = process.env.PORT || 3000;
