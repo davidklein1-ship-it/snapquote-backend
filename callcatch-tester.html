@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CallCatch — Flow Tester</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+:root{--bg:#0a0a0f;--s1:#111118;--s2:#1a1a24;--bd:#2a2a3a;--bdh:#3a3a50;--gr:#00e676;--gd:rgba(0,230,118,.08);--am:#ffab40;--ad:rgba(255,171,64,.08);--rd:#ff5252;--rdd:rgba(255,82,82,.08);--bl:#448aff;--bld:rgba(68,138,255,.08);--or:#ff6d00;--ord:rgba(255,109,0,.08);--tx:#e8e8f0;--td:#52526a;--tm:#9a9ab0;--mo:'IBM Plex Mono',monospace;--sa:'IBM Plex Sans',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--sa);font-size:13px;height:100vh;overflow:hidden;display:grid;grid-template-rows:46px 1fr}
+header{background:var(--s1);border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0}
+.logo{font-family:var(--mo);font-weight:600;font-size:13px;color:var(--gr);letter-spacing:.06em}
+.logo em{color:var(--td);font-style:normal}
+.vtag{font-family:var(--mo);font-size:9px;padding:2px 6px;border-radius:3px;background:rgba(206,147,216,.08);border:1px solid #ce93d8;color:#ce93d8;letter-spacing:.08em}
+.pill{font-family:var(--mo);font-size:10px;font-weight:600;letter-spacing:.08em;padding:3px 10px;border-radius:20px;border:1px solid;transition:all .3s}
+.p-a{color:var(--am);border-color:var(--am);background:var(--ad)}
+.p-b{color:var(--bl);border-color:var(--bl);background:var(--bld)}
+.p-g{color:var(--gr);border-color:var(--gr);background:var(--gd)}
+.p-r{color:var(--rd);border-color:var(--rd);background:var(--rdd)}
+.p-o{color:var(--or);border-color:var(--or);background:var(--ord)}
+.hr{margin-left:auto;display:flex;align-items:center;gap:8px}
+.scen{font-family:var(--mo);font-size:10px;background:var(--s2);border:1px solid var(--bd);color:var(--tm);padding:5px 8px;border-radius:4px;cursor:pointer;outline:none}
+.brst{font-family:var(--mo);font-size:10px;font-weight:600;padding:5px 10px;background:none;border:1px solid var(--bdh);color:var(--td);border-radius:4px;cursor:pointer;transition:all .2s}
+.brst:hover{border-color:var(--rd);color:var(--rd)}
+.main{display:grid;grid-template-columns:175px 1fr 270px 220px;overflow:hidden}
+.panel{border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden}
+.panel:last-child{border-right:none}
+.phdr{padding:9px 12px;border-bottom:1px solid var(--bd);background:var(--s1);display:flex;align-items:center;gap:7px;flex-shrink:0}
+.ptitle{font-family:var(--mo);font-size:9px;font-weight:600;letter-spacing:.12em;color:var(--td);text-transform:uppercase}
+.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dg{background:var(--gr);box-shadow:0 0 5px var(--gr)}
+.da{background:var(--am);box-shadow:0 0 5px var(--am)}
+.dr{background:var(--rd);box-shadow:0 0 5px var(--rd)}
+.db{background:var(--bl);box-shadow:0 0 5px var(--bl)}
+.dgr{background:var(--td)}
+.sl{flex:1;overflow-y:auto;padding:8px 6px}
+.si{display:flex;align-items:center;gap:7px;padding:6px 7px;border-radius:4px;font-family:var(--mo);font-size:10px;font-weight:500;color:var(--td);letter-spacing:.03em;transition:all .2s}
+.si.active{background:var(--s2);color:var(--tx)}
+.si.done{color:var(--gr)}
+.si.dead{color:var(--rd)}
+.sc{width:1px;height:11px;background:var(--bd);margin-left:10px}
+.kb{border-top:1px solid var(--bd);padding:8px 10px;font-size:9px;flex-shrink:0}
+.kt{color:var(--rd);letter-spacing:.1em;margin-bottom:5px;font-family:var(--mo);font-weight:600}
+.kr{display:flex;justify-content:space-between;font-family:var(--mo);color:var(--td);padding:2px 0}
+.kv{font-weight:600;color:var(--tm)}
+.kw{color:var(--am)}.ke{color:var(--rd)}
+.msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.mo{align-self:flex-end;max-width:84%;animation:fi .2s ease}
+.mi{align-self:flex-start;max-width:84%;animation:fi .2s ease}
+.ms{align-self:center;font-family:var(--mo);font-size:9px;color:var(--td);letter-spacing:.08em;text-transform:uppercase;padding:2px 0;animation:fi .2s ease}
+@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.bub{padding:8px 12px;border-radius:8px;font-family:var(--sa);font-size:12px;line-height:1.55}
+.mo .bub{background:#182e20;border:1px solid #243d2e;color:#b8e8c8;border-bottom-right-radius:2px}
+.mi .bub{background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-bottom-left-radius:2px}
+.mm{font-family:var(--mo);font-size:9px;color:var(--td);margin-top:2px}
+.foot{padding:8px 10px;border-top:1px solid var(--bd);background:var(--s1);flex-shrink:0}
+.ir{display:flex;gap:6px}
+.ci{flex:1;background:var(--s2);border:1px solid var(--bd);color:var(--tx);font-family:var(--sa);font-size:12px;padding:7px 10px;border-radius:4px;outline:none;transition:border-color .2s}
+.ci:focus{border-color:var(--bdh)}
+.ci::placeholder{color:var(--td)}
+.ci:disabled{opacity:.35}
+.bs{background:var(--gr);color:#000;border:none;font-family:var(--mo);font-size:10px;font-weight:700;padding:7px 14px;border-radius:4px;cursor:pointer;letter-spacing:.05em;transition:opacity .2s}
+.bs:hover{opacity:.85}
+.bs:disabled{opacity:.3;cursor:not-allowed}
+.qrs{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.qr{font-family:var(--mo);font-size:9px;padding:3px 8px;border-radius:3px;border:1px solid var(--bdh);color:var(--tm);cursor:pointer;background:none;transition:all .15s}
+.qr:hover{border-color:var(--bl);color:var(--bl);background:var(--bld)}
+.qr.urg{border-color:var(--or);color:var(--or)}
+.qr.urg:hover{background:var(--ord)}
+.typ{display:flex;gap:3px;padding:8px 12px;align-self:flex-start}
+.td2{width:5px;height:5px;border-radius:50%;background:var(--td);animation:tb 1.2s infinite}
+.td2:nth-child(2){animation-delay:.2s}.td2:nth-child(3){animation-delay:.4s}
+@keyframes tb{0%,60%,100%{transform:translateY(0);opacity:.3}30%{transform:translateY(-5px);opacity:1}}
+.wait{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--td);font-family:var(--mo);font-size:10px;letter-spacing:.08em;text-align:center;padding:20px}
+.wi{font-size:26px;opacity:.2}
+.pc{margin:8px;background:var(--s2);border:1px solid var(--bdh);border-radius:6px;overflow:hidden;animation:fi .3s ease}
+.ph{padding:8px 12px;font-family:var(--mo);font-size:10px;font-weight:600;border-bottom:1px solid var(--bd);letter-spacing:.06em}
+.ph-h{background:#2a1a0a;color:var(--or)}
+.ph-m{background:#2a220a;color:var(--am)}
+.ph-l{background:#0a2010;color:var(--gr)}
+.pb{padding:10px 12px;font-family:var(--mo);font-size:10px;line-height:1.9}
+.pl{color:var(--td)}.pv{color:var(--tx);font-weight:500}
+.vbadge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;background:var(--gd);color:var(--gr);border:1px solid var(--gr)}
+.dr2{margin:6px 0 2px;padding:8px;background:var(--bg);border:1px solid var(--bd);border-radius:4px;font-family:var(--sa);font-size:11px;color:var(--tx);line-height:1.5;font-style:italic}
+.pa{padding:8px 12px;display:flex;flex-direction:column;gap:5px;border-top:1px solid var(--bd)}
+.bapp{padding:8px;background:var(--gd);border:1px solid var(--gr);color:var(--gr);font-family:var(--mo);font-size:10px;font-weight:700;border-radius:4px;cursor:pointer;letter-spacing:.05em;transition:all .2s;text-align:center}
+.bapp:hover{background:var(--gr);color:#000}
+.bcall{padding:8px;background:var(--bld);border:1px solid var(--bl);color:var(--bl);font-family:var(--mo);font-size:10px;font-weight:700;border-radius:4px;cursor:pointer;letter-spacing:.05em;transition:all .2s;text-align:center}
+.bcall:hover{background:var(--bl);color:#fff}
+.brow{display:flex;gap:5px}
+.brej{flex:1;padding:7px;background:var(--rdd);border:1px solid var(--rd);color:var(--rd);font-family:var(--mo);font-size:10px;font-weight:700;border-radius:4px;cursor:pointer;letter-spacing:.04em;transition:all .2s}
+.brej:hover{background:var(--rd);color:#fff}
+.bedt{flex:1;padding:7px;background:none;border:1px solid var(--bdh);color:var(--td);font-family:var(--mo);font-size:10px;border-radius:4px;cursor:pointer;transition:all .2s}
+.bedt:hover{border-color:var(--bl);color:var(--bl)}
+.ez{padding:0 10px 10px}
+.eta{width:100%;background:var(--bg);border:1px solid var(--bdh);color:var(--tx);font-family:var(--sa);font-size:11px;padding:8px;border-radius:4px;resize:vertical;min-height:65px;outline:none;box-sizing:border-box}
+.bse{margin-top:5px;width:100%;padding:7px;background:var(--bld);border:1px solid var(--bl);color:var(--bl);font-family:var(--mo);font-size:10px;font-weight:700;border-radius:4px;cursor:pointer;letter-spacing:.04em;transition:all .2s}
+.bse:hover{background:var(--bl);color:#fff}
+.pscroll{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.log{flex:1;overflow-y:auto;padding:5px;display:flex;flex-direction:column;gap:1px}
+.le{font-family:var(--mo);font-size:9px;padding:3px 5px;border-radius:3px;display:flex;gap:6px;line-height:1.4;animation:fi .15s ease}
+.li{color:var(--tm)}.ls{color:var(--bl);background:var(--bld)}.lw{color:var(--am);background:var(--ad)}.lr{color:var(--rd);background:var(--rdd)}.lg{color:var(--gr);background:var(--gd)}
+.lt{color:var(--td);flex-shrink:0}
+.mets{padding:6px;border-top:1px solid var(--bd);display:grid;grid-template-columns:1fr 1fr;gap:4px;flex-shrink:0}
+.met{background:var(--s2);border:1px solid var(--bd);border-radius:4px;padding:5px 7px}
+.ml{font-family:var(--mo);font-size:8px;color:var(--td);letter-spacing:.08em;margin-bottom:2px}
+.mv{font-family:var(--mo);font-size:14px;font-weight:600;color:var(--tx)}
+.mv-a{color:var(--am)}.mv-s{font-size:9px;line-height:1.3;padding-top:2px}
+.pban{background:var(--ad);border:1px solid var(--am);color:var(--am);font-family:var(--mo);font-size:9px;padding:4px 8px;text-align:center;letter-spacing:.06em}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CALL<em>CATCH</em></div>
+  <div class="vtag">v4 · AI</div>
+  <div class="pill p-b" id="statePill">QUALIFYING</div>
+  <div class="hr">
+    <select class="scen" id="scenSel" onchange="loadScen(this.value)">
+      <option value="">— scenario —</option>
+      <option value="high_leak">🔴 HIGH: burst pipe</option>
+      <option value="high_price">🔴 HIGH: price question first</option>
+      <option value="medium">🟡 MEDIUM: boiler issue</option>
+      <option value="low">🟢 LOW: planned bathroom</option>
+      <option value="outofarea">📍 out of area</option>
+      <option value="rejection">❌ goes elsewhere</option>
+    </select>
+    <button class="brst" onclick="resetAll()">↺ reset</button>
+  </div>
+</header>
+
+<div class="main">
+  <div class="panel">
+    <div class="phdr"><div class="dot dgr"></div><span class="ptitle">State Machine</span></div>
+    <div class="sl" id="statesList"></div>
+    <div class="kb">
+      <div class="kt">⚡ KILL CONDITIONS</div>
+      <div class="kr">Inbound msgs <span class="kv" id="kMsg">0/6</span></div>
+      <div class="kr">Irrelevant <span class="kv" id="kIrr">0/3</span></div>
+      <div class="kr">Mins qualifying <span class="kv" id="kTime">0/60</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="phdr"><div class="dot dg"></div><span class="ptitle">Customer — WhatsApp</span></div>
+    <div class="msgs" id="chat"></div>
+    <div class="foot">
+      <div class="ir">
+        <input class="ci" id="custIn" placeholder="Type as customer…" onkeydown="if(event.key==='Enter')sendMsg()">
+        <button class="bs" id="sendBtn" onclick="sendMsg()">SEND</button>
+      </div>
+      <div class="qrs" id="qrs"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="phdr"><div class="dot da"></div><span class="ptitle">Plumber — Approval</span></div>
+    <div class="pscroll" id="plumberBody">
+      <div class="wait"><div class="wi">📋</div><div>Awaiting proposal</div><div style="font-size:8px;margin-top:3px">Fires after qualification</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="phdr"><div class="dot db"></div><span class="ptitle">System Log</span></div>
+    <div class="log" id="logBody"></div>
+    <div class="mets">
+      <div class="met"><div class="ml">INBOUND</div><div class="mv" id="mIn">0</div></div>
+      <div class="met"><div class="ml">OUTBOUND</div><div class="mv mv-a" id="mOut">0</div></div>
+      <div class="met"><div class="ml">EST. COST</div><div class="mv mv-a" id="mCost">£0.000</div></div>
+      <div class="met"><div class="ml">STATE</div><div class="mv mv-s" id="mState">—</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const BIZ={name:'Davies Plumbing & Heating',owner:'Mike',area:['NW1','NW2','NW3','NW4','NW6','NW8','NW10','NW11','N2','N3','N6','N10']};
+
+const RATE_CARD={
+  emergency_leak:{min:120,max:250},burst_pipe:{min:150,max:300},
+  boiler_issue:{min:90,max:220},boiler_service:{min:80,max:120},
+  blocked_drain:{min:80,max:180},blocked_toilet:{min:80,max:160},
+  tap_replacement:{min:70,max:140},shower_repair:{min:80,max:160},
+  bathroom_install:{min:800,max:2500},radiator:{min:80,max:180},
+  general:{min:90,max:200}
+};
+
+const FLOW=['QUALIFYING','URGENCY_CONFIRMED','PROPOSAL_SENT','PLUMBER_APPROVED','CUSTOMER_CONFIRMED','CLOSED_WON'];
+const TERMINAL=['CLOSED_LOST','SPAM_SUSPECTED','OUT_OF_AREA','PLUMBER_REJECTED'];
+
+let C;
+function fresh(){return{state:'QUALIFYING',sHist:[],history:[],inbound:0,outbound:0,irrelevant:0,qualStart:Date.now(),dead:false,paused:false,collected:{jobType:null,jobKey:null,urgency:null,postcode:null,timing:null,context:null,photoOffered:false,name:null},proposal:null};}
+
+function sysPrompt(){
+return `You are CallCatch — a missed-call WhatsApp recovery assistant for ${BIZ.name} (owner: ${BIZ.owner}).
+
+A customer called and didn't get through. Collect what the plumber needs to decide whether to take the job.
+
+COLLECT:
+- job_type: what's wrong. Classify jobKey as one of: emergency_leak, burst_pipe, boiler_issue, boiler_service, blocked_drain, blocked_toilet, tap_replacement, shower_repair, bathroom_install, radiator, general
+- urgency: HIGH | MEDIUM | LOW
+- postcode: district prefix only (NW11, N2, SW1 etc)
+- timing: MEDIUM/LOW only — skip entirely for HIGH
+- context: brief relevant detail
+- name: first name if given
+
+URGENCY:
+HIGH: burst pipe, major leak, flooding, gas smell, no heating (winter), overflowing toilet, water through ceiling
+MEDIUM: boiler issue, persistent leak, blocked drain, no hot water
+LOW: quote request, planned work, bathroom fitting, boiler service
+
+ROUTING — CRITICAL:
+HIGH urgency: postcode → context → offer photo → PROPOSAL_SENT immediately. Do NOT ask timing.
+MEDIUM/LOW urgency: postcode → timing → offer photo → PROPOSAL_SENT.
+
+PRICE QUESTIONS: If asked price before issue known reply "We'll help work that out 👍 Just so we can point you in the right direction — what's the issue?" then continue.
+NEVER quote or invent a price.
+
+TONE: UK English. Max 2 sentences. Warm, human PA. One question at a time. No bullets. Never use dashes, use commas instead.
+
+SERVICE AREA: ${BIZ.area.join(', ')} only. Outside = nextState OUT_OF_AREA.
+CANCELLATION: sorted/booked elsewhere = nextState CLOSED_LOST, reply "No problem at all — if you need a plumber in future, don't hesitate to get in touch. Have a good day."
+
+Return ONLY valid JSON:
+{"reply":"message","collected":{"jobType":"string or null","jobKey":"key or null","urgency":"HIGH|MEDIUM|LOW|null","postcode":"district or null","timing":"string or null","context":"string or null","photoOffered":false,"name":"string or null"},"nextState":"QUALIFYING|URGENCY_CONFIRMED|PROPOSAL_SENT|CLOSED_LOST|OUT_OF_AREA|SPAM_SUSPECTED","irrelevant":false}
+
+CRITICAL: Never return null for a field already collected — carry all data forward every turn.`;}
+
+async function callClaude(userMsg){
+  const msgs=[...C.history,{role:'user',content:userMsg}];
+  log('li','api ('+msgs.length+' msgs)');
+  const r=await fetch('/api/claude',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:600,system:sysPrompt(),messages:msgs})
+  });
+  if(!r.ok) throw new Error(r.status);
+  const d=await r.json();
+  const raw=d.content?.find(b=>b.type==='text')?.text||'';
+  return JSON.parse(raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim());
+}
+
+async function sendMsg(){
+  const inp=document.getElementById('custIn');
+  const txt=inp.value.trim();
+  if(!txt||C.dead||C.paused)return;
+  inp.value='';setEnabled(false);
+  await handleInbound(txt);
+  if(!C.dead&&!C.paused)setEnabled(true);
+}
+
+async function handleInbound(txt){
+  C.inbound++;renderIn(txt);updateKill();updateMetrics();
+  if(C.inbound>=6&&C.state==='QUALIFYING'){
+    const m=(Date.now()-C.qualStart)/60000;
+    if(m<60){log('lr','Kill A: spam');goto('SPAM_SUSPECTED');return;}
+  }
+  showTyping(true);
+  let res;
+  try{res=await callClaude(txt);}
+  catch(e){showTyping(false);log('lr','api error: '+e.message);renderOut("Sorry, just a moment — could you send that again?");setEnabled(true);return;}
+  showTyping(false);
+  const c=res.collected||{};
+  if(c.jobType) C.collected.jobType=c.jobType;
+  if(c.jobKey)  C.collected.jobKey=c.jobKey;
+  if(c.urgency) C.collected.urgency=c.urgency;
+  if(c.postcode)C.collected.postcode=c.postcode;
+  if(c.timing)  C.collected.timing=c.timing;
+  if(c.context) C.collected.context=c.context;
+  if(c.name)    C.collected.name=c.name;
+  if(c.photoOffered)C.collected.photoOffered=true;
+  log('li','job:'+( C.collected.jobType||'—')+' urg:'+(C.collected.urgency||'—')+' pc:'+(C.collected.postcode||'—'));
+  if(res.irrelevant){C.irrelevant++;updateKill();log('lw','irrelevant '+C.irrelevant+'/3');}
+  if(C.irrelevant>=3){
+    const bye="No problem at all — if you need a plumber in future, don't hesitate to get in touch. Have a good day.";
+    renderOut(bye);C.history.push({role:'user',content:txt},{role:'assistant',content:bye});goto('CLOSED_LOST');return;
+  }
+  const ns=res.nextState;
+  if(ns==='OUT_OF_AREA'){renderOut(res.reply);C.history.push({role:'user',content:txt},{role:'assistant',content:res.reply});goto('OUT_OF_AREA');return;}
+  if(ns==='CLOSED_LOST'){renderOut(res.reply);C.history.push({role:'user',content:txt},{role:'assistant',content:res.reply});goto('CLOSED_LOST');return;}
+  if(ns==='SPAM_SUSPECTED'){goto('SPAM_SUSPECTED');return;}
+  if(res.reply){renderOut(res.reply);C.history.push({role:'user',content:txt},{role:'assistant',content:res.reply});}
+  if(C.collected.urgency&&C.state==='QUALIFYING')goto('URGENCY_CONFIRMED');
+  if(ns==='PROPOSAL_SENT'&&C.state!=='PROPOSAL_SENT'){goto('PROPOSAL_SENT');addSys('building proposal…');buildProposal();}
+  updateMetrics();
+}
+
+function buildProposal(){
+  const col=C.collected;
+  const rate=RATE_CARD[col.jobKey||'general']||RATE_CARD.general;
+  const isH=col.urgency==='HIGH';
+  const draft=isH
+    ?`Hi${col.name?' '+col.name:''}, ${BIZ.owner} has picked this up and will aim to be with you as soon as possible, he'll call you shortly to confirm.`
+    :col.urgency==='MEDIUM'
+    ?`Hi${col.name?' '+col.name:''}, ${BIZ.owner} can get this sorted for you, he'll be in touch shortly to confirm a time.`
+    :`Hi${col.name?' '+col.name:''}, ${BIZ.owner} can get this booked in, he'll give you a call to arrange a convenient time.`;
+  C.proposal={...col,rate,draft,ts:tnow()};
+  const phCls=isH?'ph-h':col.urgency==='MEDIUM'?'ph-m':'ph-l';
+  const urgTxt=isH?'🔥 HIGH URGENCY':col.urgency==='MEDIUM'?'⚠️ MEDIUM':col.urgency==='LOW'?'✅ LOW URGENCY':'—';
+  document.getElementById('plumberBody').innerHTML=`
+    <div class="pc">
+      <div class="ph ${phCls}">${urgTxt} — ${col.jobType||'plumbing job'}</div>
+      <div class="pb">
+        <div><span class="pl">Postcode: </span><span class="pv">${col.postcode||'—'}</span></div>
+        <div><span class="pl">Job: </span><span class="pv">${col.jobType||'—'}</span></div>
+        <div><span class="pl">Context: </span><span class="pv">${col.context||'—'}</span></div>
+        ${!isH?`<div><span class="pl">Timing: </span><span class="pv">${col.timing||'flexible'}</span></div>`:''}
+        <div><span class="pl">Customer: </span><span class="pv">${col.name||'—'}</span></div>
+        <div style="margin-top:6px"><span class="pl">Potential value: </span><span class="vbadge">£${rate.min}–£${rate.max}</span></div>
+        <div style="margin-top:6px;font-size:9px;color:var(--td)">Draft reply:</div>
+        <div class="dr2">"${draft}"</div>
+      </div>
+      <div class="pa">
+        <button class="bapp" onclick="plumberApprove()">✅ Send to customer</button>
+        <button class="bcall" onclick="plumberCall()">📞 Call customer now</button>
+        <div class="brow">
+          <button class="bedt" onclick="toggleEdit()">✏️ Edit reply</button>
+          <button class="brej" onclick="plumberReject()">❌ Bin it</button>
+        </div>
+      </div>
+      <div class="ez" id="editZone" style="display:none">
+        <textarea class="eta" id="editTA">${draft}</textarea>
+        <button class="bse" onclick="plumberSendEdit()">Send edited version</button>
+      </div>
+    </div>`;
+}
+
+function plumberApprove(){
+  log('lg',BIZ.owner+' approved');
+  renderOut(C.proposal.draft);goto('PLUMBER_APPROVED');
+  document.getElementById('plumberBody').innerHTML=`<div class="wait"><div class="wi">✅</div><div style="color:var(--gr)">Approved — sent to customer</div></div>`;
+  setQRs([{l:'Great, thanks',t:'Brilliant, thank you'},{l:'What time?',t:'Do you know roughly what time?'}]);
+  setEnabled(true);document.getElementById('sendBtn').onclick=postApproval;
+}
+
+function plumberCall(){
+  C.paused=true;setEnabled(false);
+  const c=document.getElementById('chat');
+  const b=document.createElement('div');b.className='pban';b.id='pauseBanner';
+  b.textContent='⏸  Automation paused — '+BIZ.owner+' calling customer directly';
+  c.appendChild(b);c.scrollTop=c.scrollHeight;
+  log('lw','Automation paused — plumber calling');
+  document.getElementById('plumberBody').innerHTML=`
+    <div class="wait">
+      <div style="font-size:26px">📞</div>
+      <div style="color:var(--bl)">${BIZ.owner} calling customer</div>
+      <div style="font-size:8px;margin-top:4px;color:var(--td)">Automation paused</div>
+      <button onclick="resumeAuto()" style="margin-top:12px;font-family:var(--mo);font-size:9px;padding:6px 14px;border-radius:4px;border:1px solid var(--gr);color:var(--gr);background:var(--gd);cursor:pointer">▶ Resume automation</button>
+    </div>`;
+}
+
+function resumeAuto(){
+  C.paused=false;
+  const b=document.getElementById('pauseBanner');if(b)b.remove();
+  addSys('Automation resumed');log('lg','Automation resumed');
+  goto('PLUMBER_APPROVED');
+  document.getElementById('plumberBody').innerHTML=`<div class="wait"><div style="font-size:26px">📞</div><div style="color:var(--gr)">Called — resuming</div></div>`;
+  setEnabled(true);document.getElementById('sendBtn').onclick=postApproval;
+  setQRs([{l:'Great, thanks',t:'Brilliant, thank you'},{l:'What time?',t:'Do you know roughly what time?'}]);
+}
+
+function plumberReject(){
+  log('lw',BIZ.owner+' rejected');
+  renderOut("Thanks for getting in touch — unfortunately we're fully booked at the moment and can't take this one on. Sorry we can't help.");
+  goto('PLUMBER_REJECTED');
+  document.getElementById('plumberBody').innerHTML=`<div class="wait"><div class="wi">❌</div><div style="color:var(--rd)">Rejected</div></div>`;
+}
+
+function plumberSendEdit(){
+  const ta=document.getElementById('editTA');if(!ta)return;
+  const e=ta.value.trim();if(!e)return;
+  renderOut(e);goto('PLUMBER_APPROVED');
+  document.getElementById('plumberBody').innerHTML=`<div class="wait"><div class="wi">✏️</div><div style="color:var(--bl)">Edited & sent</div></div>`;
+  setQRs([{l:'Great, thanks',t:'Thank you so much'}]);
+  setEnabled(true);document.getElementById('sendBtn').onclick=postApproval;
+}
+
+function toggleEdit(){const ez=document.getElementById('editZone');if(ez)ez.style.display=ez.style.display==='none'?'block':'none';}
+
+async function postApproval(){
+  const inp=document.getElementById('custIn');
+  const txt=inp.value.trim();if(!txt)return;
+  inp.value='';setEnabled(false);C.inbound++;renderIn(txt);
+  C.history.push({role:'user',content:txt});
+  showTyping(true);
+  try{
+    const r=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:150,system:`You are a WhatsApp assistant for ${BIZ.name}. Job confirmed. Reply warmly in 1 sentence UK English. If asked time say ${BIZ.owner} will call to confirm. Return only reply text.`,messages:C.history})});
+    const d=await r.json();
+    const reply=d.content?.find(b=>b.type==='text')?.text?.trim()||BIZ.owner+' will call shortly.';
+    showTyping(false);renderOut(reply);C.history.push({role:'assistant',content:reply});
+    goto('CUSTOMER_CONFIRMED');setTimeout(()=>goto('CLOSED_WON'),500);
+  }catch(e){showTyping(false);renderOut(BIZ.owner+' will be in touch shortly.');goto('CLOSED_WON');}
+  updateMetrics();
+}
+
+function renderIn(txt){
+  const c=document.getElementById('chat');
+  const d=document.createElement('div');d.className='mi';
+  d.innerHTML=`<div class="bub">${esc(txt)}</div><div class="mm">${tnow()} · Customer</div>`;
+  c.appendChild(d);c.scrollTop=c.scrollHeight;
+}
+function renderOut(txt){
+  C.outbound++;
+  const c=document.getElementById('chat');
+  const d=document.createElement('div');d.className='mo';
+  d.innerHTML=`<div class="bub">${esc(txt)}</div><div class="mm">${tnow()} · CallCatch</div>`;
+  c.appendChild(d);c.scrollTop=c.scrollHeight;
+  log('li','Out: "'+txt.substring(0,50)+(txt.length>50?'…':'')+'"');
+  updateMetrics();
+}
+function addSys(txt){
+  const c=document.getElementById('chat');
+  const d=document.createElement('div');d.className='ms';d.textContent=txt;
+  c.appendChild(d);c.scrollTop=c.scrollHeight;
+}
+function showTyping(show){
+  const c=document.getElementById('chat');
+  let t=document.getElementById('typInd');
+  if(show&&!t){t=document.createElement('div');t.id='typInd';t.className='typ';t.innerHTML='<div class="td2"></div><div class="td2"></div><div class="td2"></div>';c.appendChild(t);}
+  else if(!show&&t)t.remove();
+  if(show)c.scrollTop=c.scrollHeight;
+}
+function setEnabled(on){
+  document.getElementById('custIn').disabled=!on;
+  document.getElementById('sendBtn').disabled=!on;
+  if(on)document.getElementById('sendBtn').onclick=sendMsg;
+}
+function setQRs(list){
+  const el=document.getElementById('qrs');el.innerHTML='';
+  (list||[]).forEach(r=>{
+    const b=document.createElement('button');b.className='qr'+(r.cls?' '+r.cls:'');
+    b.textContent=r.l;b.onclick=()=>{document.getElementById('custIn').value=r.t;sendMsg();};
+    el.appendChild(b);
+  });
+}
+function goto(ns){
+  if(C.state===ns)return;
+  const prev=C.state;C.state=ns;C.sHist.push({from:prev,to:ns});
+  log('ls',prev+' → '+ns);updatePill(ns);renderStates();
+  if([...TERMINAL,'CLOSED_WON','PLUMBER_REJECTED'].includes(ns)){C.dead=true;setEnabled(false);setQRs([]);}
+  updateMetrics();
+}
+function renderStates(){
+  const el=document.getElementById('statesList');el.innerHTML='';
+  FLOW.forEach((s,i)=>{
+    const done=C.sHist.some(h=>h.to===s)&&C.state!==s,active=C.state===s;
+    const d=document.createElement('div');d.className='si'+(active?' active':'')+(done?' done':'');
+    d.innerHTML=`<div class="dot ${active?'dg':done?'dg':'dgr'}"></div><span>${s}</span>`;
+    el.appendChild(d);
+    if(i<FLOW.length-1){const cn=document.createElement('div');cn.className='sc';el.appendChild(cn);}
+  });
+  if(TERMINAL.includes(C.state)){const d=document.createElement('div');d.className='si dead';d.innerHTML=`<div class="dot dr"></div><span>${C.state}</span>`;el.appendChild(d);}
+}
+function updatePill(s){
+  const p=document.getElementById('statePill');p.textContent=s;p.className='pill';
+  if(['CLOSED_WON','PLUMBER_APPROVED','CUSTOMER_CONFIRMED'].includes(s))p.classList.add('p-g');
+  else if([...TERMINAL,'PLUMBER_REJECTED'].includes(s))p.classList.add('p-r');
+  else if(s==='PROPOSAL_SENT')p.classList.add('p-a');
+  else if(s==='URGENCY_CONFIRMED'&&C.collected.urgency==='HIGH')p.classList.add('p-o');
+  else p.classList.add('p-b');
+}
+function updateKill(){
+  const km=document.getElementById('kMsg');km.textContent=C.inbound+'/6';km.className='kv'+(C.inbound>=5?' ke':C.inbound>=4?' kw':'');
+  const ki=document.getElementById('kIrr');ki.textContent=C.irrelevant+'/3';ki.className='kv'+(C.irrelevant>=2?' kw':'');
+  const m=Math.round((Date.now()-C.qualStart)/60000);
+  document.getElementById('kTime').textContent=m+'/60';
+}
+function updateMetrics(){
+  document.getElementById('mIn').textContent=C.inbound;
+  document.getElementById('mOut').textContent=C.outbound;
+  document.getElementById('mCost').textContent='£'+((C.inbound+C.outbound)*0.06+C.inbound*0.003).toFixed(3);
+  document.getElementById('mState').textContent=C.state;
+}
+function log(type,msg){
+  const a=document.getElementById('logBody');
+  const d=document.createElement('div');d.className='le '+type;
+  d.innerHTML='<span class="lt">'+tnow()+'</span><span>'+esc(msg)+'</span>';
+  a.appendChild(d);a.scrollTop=a.scrollHeight;
+}
+function tnow(){return new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+const SCENS={
+  high_leak:  ["massive burst pipe under the sink, water everywhere","NW11","yes actively leaking right now"],
+  high_price: ["how much do you charge for a leak?","burst pipe flooding the kitchen","NW11","yes im home"],
+  medium:     ["boiler keeps cutting out","N2 0AE","no huge rush, sometime this week"],
+  low:        ["looking for a quote on a new bathroom","NW3","sometime next month is fine"],
+  outofarea:  ["burst pipe flooding kitchen","SW1A"],
+  rejection:  ["need a plumber for a leak","actually my neighbour sorted it cheers"],
+};
+function loadScen(name){
+  if(!name)return;resetAll(true);
+  const msgs=SCENS[name]||[];let delay=1800;
+  msgs.forEach(m=>{setTimeout(()=>{if(!C.dead){document.getElementById('custIn').value=m;sendMsg();}},delay);delay+=3800;});
+  document.getElementById('scenSel').value='';log('li','Scenario: '+name);
+}
+
+function resetAll(silent=false){
+  C=fresh();
+  document.getElementById('chat').innerHTML='';
+  document.getElementById('logBody').innerHTML='';
+  document.getElementById('qrs').innerHTML='';
+  document.getElementById('plumberBody').innerHTML='<div class="wait"><div class="wi">📋</div><div>Awaiting proposal</div><div style="font-size:8px;margin-top:3px">Fires after qualification</div></div>';
+  setEnabled(true);document.getElementById('sendBtn').onclick=sendMsg;
+  updatePill('QUALIFYING');renderStates();updateMetrics();updateKill();
+  if(!silent)init();
+}
+
+function init(){
+  C=fresh();
+  log('li','CallCatch v4 — AI flow tester');
+  log('li',BIZ.name+' | '+BIZ.owner);
+  const opening=`Hi, sorry you couldn't get through. Can you tell me the problem and your postcode?`;
+  C.history.push({role:'assistant',content:opening});
+  renderOut(opening);C.outbound--;
+  updatePill('QUALIFYING');renderStates();
+  setQRs([
+    {l:'Burst pipe — flooding',t:"there's a burst pipe, water coming through the ceiling",cls:'urg'},
+    {l:'Boiler broken',t:"my boiler's stopped working, no heating or hot water"},
+    {l:'How much for a leak?',t:'how much do you charge to fix a leak?'},
+    {l:'Blocked drain',t:'my kitchen drain is completely blocked'},
+    {l:'New bathroom quote',t:'looking for a quote on a new bathroom'},
+  ]);
+  setEnabled(true);
+}
+
+init();
+</script>
+</body>
+</html>
