@@ -272,6 +272,26 @@ app.get('/list-numbers', async (req, res) => {
   }
 });
 
+// TEMPORARY — check any WABA's numbers + templates. Pass ?waba=ID. Delete after use.
+app.get('/waba-check', async (req, res) => {
+  try {
+    const wabaId = req.query.waba || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+    const [numbersResp, templatesResp] = await Promise.all([
+      fetch(`https://graph.facebook.com/v19.0/${wabaId}/phone_numbers?fields=display_phone_number,verified_name,id&limit=100`, {
+        headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` },
+      }),
+      fetch(`https://graph.facebook.com/v19.0/${wabaId}/message_templates?fields=name,language,status&limit=100`, {
+        headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` },
+      }),
+    ]);
+    const numbers = await numbersResp.json();
+    const templates = await templatesResp.json();
+    res.json({ wabaIdChecked: wabaId, phoneNumberIdInEnv: PHONE_NUMBER_ID, numbers, templates });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
 // Meta webhook verification
 app.get('/webhooks/whatsapp-incoming', (req, res) => {
   const mode = req.query['hub.mode'];
