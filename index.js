@@ -48,7 +48,7 @@ async function sendMissedCallTemplate(toNumber) {
       type: 'template',
       template: {
         name: process.env.WHATSAPP_TEMPLATE_NAME || 'missed_call_recovery',
-        language: { code: 'en' }, // must match the language the template was approved under
+        language: { code: 'en_GB' }, // must match the language the template was approved under
       },
     }),
   });
@@ -235,6 +235,20 @@ app.get('/register', async (req, res) => {
     });
     const result = await response.json();
     res.status(response.ok ? 200 : 500).json(result);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+// TEMPORARY — list templates visible to this WABA. Delete after use.
+app.get('/list-templates', async (req, res) => {
+  try {
+    const wabaId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+    const response = await fetch(`https://graph.facebook.com/v19.0/${wabaId}/message_templates?fields=name,language,status&limit=100`, {
+      headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` },
+    });
+    const result = await response.json();
+    res.status(response.ok ? 200 : 500).json({ wabaIdUsed: wabaId, templates: result });
   } catch (err) {
     res.status(500).send(err.message);
   }
