@@ -33,6 +33,30 @@ async function sendWhatsApp(to, message) {
   return result;
 }
 
+// Template send — required for business-initiated messages (missed-call opener)
+async function sendMissedCallTemplate(toNumber) {
+  const to = String(toNumber).replace(/\D/g, ''); // digits only, no +
+  const response = await fetch(`https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${ACCESS_TOKEN}`,
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: to,
+      type: 'template',
+      template: {
+        name: process.env.WHATSAPP_TEMPLATE_NAME || 'missed_call_recovery',
+        language: { code: 'en_GB' }, // must match the language the template was approved under
+      },
+    }),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(JSON.stringify(result));
+  return result;
+}
+
 // ── SUPABASE HELPERS ──────────────────────────────────────
 async function dbGet(table, filters) {
   const params = Object.entries(filters).map(([k,v]) => `${k}=${v}`).join('&');
@@ -151,6 +175,49 @@ CRITICAL RULES:
 
 // ── ROUTES ────────────────────────────────────────────────
 app.get('/', (req, res) => res.send('CallCatch backend running'));
+
+// Voice webhook — a forwarded call landing here IS a missed call
+app.post('/voice/incoming', async (req, res) => {
+  // Log everything Twilio sends so we can see where the customer's number lives on forwarded calls
+  console.log('INBOUND CALL:', JSON.stringify({
+    From: req.body.From,
+    To: req.body.To,
+    ForwardedFrom: req.body.ForwardedFrom,
+    CalledVia: req.body.CalledVia,
+    CallerName: req.body.CallerName,
+    CallSid: req.body.CallSid,
+  }));
+
+  const customer = req.body.From;
+
+  // Don't try to WhatsApp withheld/anonymous callers
+  if (customer && customer.startsWith('+')) {
+    try {
+      await sendMissedCallTemplate(customer);
+      console.log('Missed-call WhatsApp sent to ' + customer);
+    } catch (err) {
+      console.error('WhatsApp send FAILED:', err.message);
+    }
+  } else {
+    console.log('Caller ID withheld or invalid, skipping WhatsApp:', customer);
+  }
+
+  res.type('text/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Amy">Sorry we missed your call. We're sending you a WhatsApp message now.</Say>
+  <Hangup/>
+</Response>`);
+});
+
+// TEMPORARY — direct template send test. Delete after testing.
+app.get('/test-send', async (req, res) => {
+  try {
+    const result = await sendMissedCallTemplate('+447779300431');
+    res.json(result);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
 
 // Meta webhook verification
 app.get('/webhooks/whatsapp-incoming', (req, res) => {
