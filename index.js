@@ -254,6 +254,24 @@ app.get('/list-templates', async (req, res) => {
   }
 });
 
+// TEMPORARY — list phone numbers on the template's WABA. Delete after use.
+app.get('/list-numbers', async (req, res) => {
+  try {
+    const wabaId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+    const response = await fetch(`https://graph.facebook.com/v19.0/${wabaId}/phone_numbers?fields=display_phone_number,verified_name,id,code_verification_status&limit=100`, {
+      headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` },
+    });
+    const result = await response.json();
+    res.status(response.ok ? 200 : 500).json({
+      wabaIdUsed: wabaId,
+      phoneNumberIdInEnv: PHONE_NUMBER_ID,
+      numbersOnThisWaba: result,
+    });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
 // Meta webhook verification
 app.get('/webhooks/whatsapp-incoming', (req, res) => {
   const mode = req.query['hub.mode'];
