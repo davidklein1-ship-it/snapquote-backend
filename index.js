@@ -292,6 +292,35 @@ app.get('/waba-check', async (req, res) => {
   }
 });
 
+// TEMPORARY — create the template on the correct WABA. Pass ?waba=ID. Delete after use.
+app.get('/create-template', async (req, res) => {
+  try {
+    const wabaId = req.query.waba || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+    const response = await fetch(`https://graph.facebook.com/v19.0/${wabaId}/message_templates`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${ACCESS_TOKEN}`,
+      },
+      body: JSON.stringify({
+        name: 'missed_call_recovery',
+        language: 'en_GB',
+        category: 'UTILITY',
+        components: [
+          {
+            type: 'BODY',
+            text: 'Hi, sorry we missed your call. Can you tell me the problem and your postcode so we can get back to you as quickly as possible?',
+          },
+        ],
+      }),
+    });
+    const result = await response.json();
+    res.status(response.ok ? 200 : 500).json(result);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
 // Meta webhook verification
 app.get('/webhooks/whatsapp-incoming', (req, res) => {
   const mode = req.query['hub.mode'];
