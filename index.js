@@ -48,7 +48,7 @@ async function sendMissedCallTemplate(toNumber) {
       type: 'template',
       template: {
         name: process.env.WHATSAPP_TEMPLATE_NAME || 'missed_call_recovery',
-        language: { code: 'en_GB' }, // must match the language the template was approved under
+        language: { code: 'en' }, // must match the language the template was approved under
       },
     }),
   });
